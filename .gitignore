@@ -112,7 +112,7 @@ num
 .vscode/
 DG_data/*/*
 processed_data/*/*
-saved_models/**
+#saved_models/**
 saved_results/**
 logs/*
 wandb
