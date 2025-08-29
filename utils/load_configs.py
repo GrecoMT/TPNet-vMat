@@ -74,7 +74,7 @@ def get_link_prediction_args(is_evaluation: bool = False):
                         help='the time decay weight of the maintained temporal walk matrix')
     '''
     parser.add_argument('--rp_time_decay_weight', type=list[float], default=[0.001, 0.0001, 
-                                                                  0.00001, 0.000001, 0.00000001, 0.00000001])
+                                                                  0.00001, 0.000001, 0.00000001, 0.000000001])
     parser.add_argument('--rp_dim_factor', type=int, default=10,
                         help='the dim factor of random projections w.r.t. the log(2*edge_num)')
     parser.add_argument('--encode_not_rp', action='store_true', help='whether to use pairwise features in encoder')
