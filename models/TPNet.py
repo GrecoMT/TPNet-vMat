@@ -37,6 +37,8 @@ class RandomProjectionModule(nn.Module):
         #ADD ON: CHECK ARGUMENTS
         self.lambdas = time_decay_weight
         self.M = len(self.lambdas)
+        print(f"questa è la sequenza di lambdas{self.lambdas}")
+        print(f"questa è la len{self.M}")
         ##
         
         self.begging_time = nn.Parameter(torch.tensor(beginning_time), requires_grad=False)
@@ -215,6 +217,8 @@ class RandomProjectionModule(nn.Module):
                 per_scale.append(torch.stack(
                     [self.random_projections_multi[m][i][node_ids] for i in range(self.num_layer + 1)], dim=1
                 ))  # (batch, k+1, d_R)
+            print(f"NON SO COSA STAMPA{per_scale}")
+            print(f"NON SO COSA STAMPA PARTE 2{len(per_scale)}")
             avg = torch.stack(per_scale, dim=0).mean(dim=0)  # (batch, k+1, d_R)
             return [avg[:, i, :] for i in range(self.num_layer + 1)]
 
