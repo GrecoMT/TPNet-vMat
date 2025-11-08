@@ -7,212 +7,6 @@ from models.modules import TimeEncoder
 
 
 class RandomProjectionModule(nn.Module):
-    def __init__(self, node_num: int, edge_num: int, dim_factor: int, num_layer: int, time_decay_weight: list[float],
-                 device: str, use_matrix: bool, beginning_time: np.float64, not_scale: bool, enforce_dim: int):
-        """
-        This model maintains a series of temporal walk matrices $A_^(0)(t),A_^(1)(t),...,A^(k)(t)$ through
-        random feature propagation, and extract the pairwise features from the obtained random projections.
-        :param node_num: int, the number of nodes
-        :param edge_num: int, the number of edges
-        :param dim_factor: int, the parameter to control the dimension of random projections. Specifically, the
-                           dimension of the random projections is set to be dim_factor * log(2*edge_num)
-        :param num_layer: int, the max hop of the maintained temporal walk matrices
-        :param time_decay_weight: float, the time decay weight (lambda of the original paper)
-        :param device: str, torch device
-        :param use_matrix: bool, if True, explicitly maintain the temporal walk matrices
-        :param beginning_time: np.float64, the earliest time in the given temporal graph
-        :param not_scale: bool, if True, the inner product of nodes' random projections will not be scaled
-        :param enforce_dim: int, if not -1, explicitly set the dimension of random projections to enforce_dim
-        """
-        super(RandomProjectionModule, self).__init__()
-        self.node_num = node_num
-        self.edge_num = edge_num
-        if enforce_dim != -1:
-            self.dim = enforce_dim
-        else:
-            self.dim = min(int(math.log(self.edge_num * 2)) * dim_factor, node_num)
-        self.num_layer = num_layer
-        self.time_decay_weight = time_decay_weight
-        
-        #ADD ON: CHECK ARGUMENTS
-        self.lambdas = time_decay_weight
-        self.M = len(self.lambdas)
-        print(f"questa è la sequenza di lambdas{self.lambdas}")
-        print(f"questa è la len{self.M}")
-        ##
-        
-        self.begging_time = nn.Parameter(torch.tensor(beginning_time), requires_grad=False)
-        self.now_time = nn.Parameter(torch.tensor(beginning_time), requires_grad=False)
-        self.device = device
-        #self.random_projections = nn.ParameterList()
-        self.use_matrix = use_matrix
-        self.node_feature_dim = 128
-        self.not_scale = not_scale
-        
-        #MODIFIED
-        self.random_projections = None 
-
-        
-        if self.use_matrix:
-            # ogni scala ha il proprio stack H^(0..k) di dimensione n x n
-            if self.M == 1:
-                self.random_projections = nn.ParameterList()
-                for i in range(self.num_layer + 1):
-                    if i == 0:
-                        self.random_projections.append(
-                            nn.Parameter(torch.eye(self.node_num), requires_grad=False))
-                    else:
-                        self.random_projections.append(
-                            nn.Parameter(torch.zeros_like(self.random_projections[i - 1]), requires_grad=False))
-            else:
-                self.random_projections_multi = nn.ModuleList()
-                for _ in range(self.M):
-                    pl = nn.ParameterList()
-                    for i in range(self.num_layer + 1):
-                        if i == 0:
-                            pl.append(nn.Parameter(torch.eye(self.node_num), requires_grad=False))
-                        else:
-                            pl.append(nn.Parameter(torch.zeros_like(pl[i - 1]), requires_grad=False))
-                    self.random_projections_multi.append(pl)
-        else:
-            # ogni scala ha il proprio stack H^(0..k) di dimensione n x d_R
-            if self.M == 1:
-                self.random_projections = nn.ParameterList()
-                for i in range(self.num_layer + 1):
-                    if i == 0:
-                        self.random_projections.append(
-                            nn.Parameter(torch.normal(0, 1 / math.sqrt(self.dim), (self.node_num, self.dim)),
-                                         requires_grad=False))
-                    else:
-                        self.random_projections.append(
-                            nn.Parameter(torch.zeros_like(self.random_projections[i - 1]), requires_grad=False))
-            else:
-                self.random_projections_multi = nn.ModuleList()
-                for _ in range(self.M):
-                    pl = nn.ParameterList()
-                    for i in range(self.num_layer + 1):
-                        if i == 0:
-                            pl.append(nn.Parameter(
-                                torch.normal(0, 1 / math.sqrt(self.dim), (self.node_num, self.dim)),
-                                requires_grad=False))
-                        else:
-                            pl.append(nn.Parameter(torch.zeros_like(pl[i - 1]), requires_grad=False))
-                    self.random_projections_multi.append(pl)
-        
-        self.pair_wise_feature_dim = (2 * self.num_layer + 2) ** 2
-        self.mlp = nn.Sequential(nn.Linear(self.pair_wise_feature_dim, self.pair_wise_feature_dim * 4), nn.ReLU(),
-                                 nn.Linear(self.pair_wise_feature_dim * 4, self.pair_wise_feature_dim))
-        
-        #introduzione pesi per hop
-        # W in R^{(k+1) x M}; softmax per riga su M
-        if self.M > 1:
-            # init a zeri -> softmax uniforme (1/M) per hop: parte come "media"
-            self.hop_gate = nn.Parameter(torch.zeros(self.num_layer + 1, self.M))
-        else:
-            self.hop_gate = None
-        print(f"SHAPE DEI PARAMETRI{self.hop_gate.shape}")
-    
-    '''
-    INIT MEDIA SEMPLICE
-    def __init__(self, node_num: int, edge_num: int, dim_factor: int, num_layer: int, time_decay_weight: list[float],
-                 device: str, use_matrix: bool, beginning_time: np.float64, not_scale: bool, enforce_dim: int):
-        """
-        This model maintains a series of temporal walk matrices $A_^(0)(t),A_^(1)(t),...,A^(k)(t)$ through
-        random feature propagation, and extract the pairwise features from the obtained random projections.
-        :param node_num: int, the number of nodes
-        :param edge_num: int, the number of edges
-        :param dim_factor: int, the parameter to control the dimension of random projections. Specifically, the
-                           dimension of the random projections is set to be dim_factor * log(2*edge_num)
-        :param num_layer: int, the max hop of the maintained temporal walk matrices
-        :param time_decay_weight: float, the time decay weight (lambda of the original paper)
-        :param device: str, torch device
-        :param use_matrix: bool, if True, explicitly maintain the temporal walk matrices
-        :param beginning_time: np.float64, the earliest time in the given temporal graph
-        :param not_scale: bool, if True, the inner product of nodes' random projections will not be scaled
-        :param enforce_dim: int, if not -1, explicitly set the dimension of random projections to enforce_dim
-        """
-        super(RandomProjectionModule, self).__init__()
-        self.node_num = node_num
-        self.edge_num = edge_num
-        if enforce_dim != -1:
-            self.dim = enforce_dim
-        else:
-            self.dim = min(int(math.log(self.edge_num * 2)) * dim_factor, node_num)
-        self.num_layer = num_layer
-        self.time_decay_weight = time_decay_weight
-        
-        #ADD ON: CHECK ARGUMENTS
-        self.lambdas = time_decay_weight
-        self.M = len(self.lambdas)
-        print(f"questa è la sequenza di lambdas{self.lambdas}")
-        print(f"questa è la len{self.M}")
-        ##
-        
-        self.begging_time = nn.Parameter(torch.tensor(beginning_time), requires_grad=False)
-        self.now_time = nn.Parameter(torch.tensor(beginning_time), requires_grad=False)
-        self.device = device
-        #self.random_projections = nn.ParameterList()
-        self.use_matrix = use_matrix
-        self.node_feature_dim = 128
-        self.not_scale = not_scale
-        
-        #MODIFIED
-        self.random_projections = None 
-
-        
-        if self.use_matrix:
-            # ogni scala ha il proprio stack H^(0..k) di dimensione n x n
-            if self.M == 1:
-                self.random_projections = nn.ParameterList()
-                for i in range(self.num_layer + 1):
-                    if i == 0:
-                        self.random_projections.append(
-                            nn.Parameter(torch.eye(self.node_num), requires_grad=False))
-                    else:
-                        self.random_projections.append(
-                            nn.Parameter(torch.zeros_like(self.random_projections[i - 1]), requires_grad=False))
-            else:
-                self.random_projections_multi = nn.ModuleList()
-                for _ in range(self.M):
-                    pl = nn.ParameterList()
-                    for i in range(self.num_layer + 1):
-                        if i == 0:
-                            pl.append(nn.Parameter(torch.eye(self.node_num), requires_grad=False))
-                        else:
-                            pl.append(nn.Parameter(torch.zeros_like(pl[i - 1]), requires_grad=False))
-                    self.random_projections_multi.append(pl)
-        else:
-            # ogni scala ha il proprio stack H^(0..k) di dimensione n x d_R
-            if self.M == 1:
-                self.random_projections = nn.ParameterList()
-                for i in range(self.num_layer + 1):
-                    if i == 0:
-                        self.random_projections.append(
-                            nn.Parameter(torch.normal(0, 1 / math.sqrt(self.dim), (self.node_num, self.dim)),
-                                         requires_grad=False))
-                    else:
-                        self.random_projections.append(
-                            nn.Parameter(torch.zeros_like(self.random_projections[i - 1]), requires_grad=False))
-            else:
-                self.random_projections_multi = nn.ModuleList()
-                for _ in range(self.M):
-                    pl = nn.ParameterList()
-                    for i in range(self.num_layer + 1):
-                        if i == 0:
-                            pl.append(nn.Parameter(
-                                torch.normal(0, 1 / math.sqrt(self.dim), (self.node_num, self.dim)),
-                                requires_grad=False))
-                        else:
-                            pl.append(nn.Parameter(torch.zeros_like(pl[i - 1]), requires_grad=False))
-                    self.random_projections_multi.append(pl)
-        
-        self.pair_wise_feature_dim = (2 * self.num_layer + 2) ** 2
-        self.mlp = nn.Sequential(nn.Linear(self.pair_wise_feature_dim, self.pair_wise_feature_dim * 4), nn.ReLU(),
-                                 nn.Linear(self.pair_wise_feature_dim * 4, self.pair_wise_feature_dim))
-    '''
-    
-    '''
-    INIT ORIGINALE
     def __init__(self, node_num: int, edge_num: int, dim_factor: int, num_layer: int, time_decay_weight: float,
                  device: str, use_matrix: bool, beginning_time: np.float64, not_scale: bool, enforce_dim: int):
         """
@@ -269,61 +63,7 @@ class RandomProjectionModule(nn.Module):
         self.pair_wise_feature_dim = (2 * self.num_layer + 2) ** 2
         self.mlp = nn.Sequential(nn.Linear(self.pair_wise_feature_dim, self.pair_wise_feature_dim * 4), nn.ReLU(),
                                  nn.Linear(self.pair_wise_feature_dim * 4, self.pair_wise_feature_dim))
-    '''
-    
-    #UPDATE PER MEDIA SEMPLICE E PER PESATURA PER HOP
-    def update(self, src_node_ids: np.ndarray, dst_node_ids: np.ndarray, node_interact_times: np.ndarray):
-        """
-        updating the temporal walk matrices after observing a batch of interactions.
-        :param src_node_ids: np.ndarray, shape (batch,),source node ids
-        :param dst_node_ids: np.ndarray, shape (batch,), destination node ids
-        :param node_interact_times: np.ndarray, shape (batch,), timestamps of interactions
-        """
-        src_node_ids = torch.from_numpy(src_node_ids).to(self.device)
-        dst_node_ids = torch.from_numpy(dst_node_ids).to(self.device)
-        next_time = node_interact_times[-1]
-        node_interact_times = torch.from_numpy(node_interact_times).to(dtype=torch.float, device=self.device)
 
-        #MODIFICA: non serve in quanto si vogliono mantenere più scale
-        #time_weight = torch.exp(-self.time_decay_weight * (next_time - node_interact_times))[:, None]
-
-        if self.M == 1:
-            # ---- identico al codice originale ----
-            time_weight = torch.exp(-self.lambdas[0] * (next_time - node_interact_times))[:, None]
-            for i in range(1, self.num_layer + 1):
-                self.random_projections[i].data = self.random_projections[i].data * np.power(
-                    np.exp(-self.lambdas[0] * (next_time - self.now_time.cpu().numpy())), i)
-            for i in range(self.num_layer, 0, -1):
-                src_update_messages = self.random_projections[i - 1][dst_node_ids] * time_weight
-                dst_update_messages = self.random_projections[i - 1][src_node_ids] * time_weight
-                self.random_projections[i].scatter_add_(dim=0, index=src_node_ids[:, None].expand(-1, self.dim),
-                                                        src=src_update_messages)
-                self.random_projections[i].scatter_add_(dim=0, index=dst_node_ids[:, None].expand(-1, self.dim),
-                                                        src=dst_update_messages)
-        else:
-            # ---- multi-scala ----
-            for m, lam in enumerate(self.lambdas):
-                time_weight = torch.exp(-lam * (next_time - node_interact_times))[:, None]
-
-                # decadimento quando il "tempo corrente" avanza a next_time
-                for i in range(1, self.num_layer + 1):
-                    factor = np.power(np.exp(-lam * (next_time - self.now_time.cpu().numpy())), i)
-                    self.random_projections_multi[m][i].data = self.random_projections_multi[m][i].data * factor
-
-                # aggiornamento batch
-                for i in range(self.num_layer, 0, -1):
-                    src_update_messages = self.random_projections_multi[m][i - 1][dst_node_ids] * time_weight
-                    dst_update_messages = self.random_projections_multi[m][i - 1][src_node_ids] * time_weight
-                    self.random_projections_multi[m][i].scatter_add_(
-                        dim=0, index=src_node_ids[:, None].expand(-1, self.dim), src=src_update_messages)
-                    self.random_projections_multi[m][i].scatter_add_(
-                        dim=0, index=dst_node_ids[:, None].expand(-1, self.dim), src=dst_update_messages)
-        
-        # set current timestamp to the biggest timestamp in this batch
-        self.now_time.data = torch.tensor(next_time, device=self.device)
-    
-    '''
-    UPDATE ORIGINALE
     def update(self, src_node_ids: np.ndarray, dst_node_ids: np.ndarray, node_interact_times: np.ndarray):
         """
         updating the temporal walk matrices after observing a batch of interactions.
@@ -357,84 +97,7 @@ class RandomProjectionModule(nn.Module):
 
         # set current timestamp to the biggest timestamp in this batch
         self.now_time.data = torch.tensor(next_time, device=self.device)
-        '''
 
-    #random projection con pesi per hop
-    def get_random_projections(self, node_ids: np.ndarray):
-        """
-        Ritorna, per i = 0..k, la proiezione random per-hop F[:, i, :]
-        con fusione early delle M scale.
-        Output: lista di lunghezza (k+1) di tensori [batch, d_R].
-        """
-        # shape helper
-        k1 = self.num_layer + 1
-
-        # M == 1: identico all'originale
-        if self.M == 1:
-            out = []
-            for i in range(k1):
-                out.append(self.random_projections[i][node_ids])
-            return out
-
-        # M > 1: raccogli per scala -> (M, batch, k+1, d_R)
-        per_scale = []
-        if self.use_matrix:
-            # se usi la versione "matrix", in pairing tipicamente estrai righe/colonne;
-            # qui manteniamo la stessa semantica: selezione per nodo su dimensione 0
-            for m in range(self.M):
-                stack_m = torch.stack(
-                    [self.random_projections_multi[m][i][node_ids, :] for i in range(k1)],
-                    dim=1  # (batch, k+1, d_R)
-                )
-                per_scale.append(stack_m)
-        else:
-            for m in range(self.M):
-                stack_m = torch.stack(
-                    [self.random_projections_multi[m][i][node_ids, :] for i in range(k1)],
-                    dim=1  # (batch, k+1, d_R)
-                )
-                per_scale.append(stack_m)
-
-        S = torch.stack(per_scale, dim=0)  # (M, batch, k+1, d_R)
-
-        # pesi per-hop: W in R^{(k+1) x M} -> softmax per riga su M
-        W = torch.softmax(self.hop_gate, dim=1)  # (k+1, M)
-        # broadcast a (M, 1, k+1, 1)
-        Wb = W.t().contiguous().view(self.M, 1, k1, 1)
-
-        # somma pesata sulle M scale -> (batch, k+1, d_R)
-        fused = (S * Wb).sum(dim=0)
-
-        # ritorna lista per-hop [(batch, d_R)] * (k+1)
-        return [fused[:, i, :] for i in range(k1)]
-    
-
-    '''
-    random projections per media semplice
-    def get_random_projections(self, node_ids: np.ndarray):
-        """
-        Ritorna, per ogni hop i=0..k, la proiezione media su M scale: [(batch, d_R)] * (k+1).
-        Con M=1 è identico all'originale.
-        """
-        if self.M == 1:
-            random_projections = []
-            for i in range(self.num_layer + 1):
-                random_projections.append(self.random_projections[i][node_ids])
-            return random_projections
-        else:
-            # stack per scala -> media su m -> lista per hop
-            per_scale = []
-            for m in range(self.M):
-                per_scale.append(torch.stack(
-                    [self.random_projections_multi[m][i][node_ids] for i in range(self.num_layer + 1)], dim=1
-                ))  # (batch, k+1, d_R)
-            print(f"NON SO COSA STAMPA PARTE 2{len(per_scale)}")
-            avg = torch.stack(per_scale, dim=0).mean(dim=0)  # (batch, k+1, d_R)
-            return [avg[:, i, :] for i in range(self.num_layer + 1)]
-    '''
-    
-    '''
-    random projections original
     def get_random_projections(self, node_ids: np.ndarray):
         """
         get the random projections of the give node ids.
@@ -445,7 +108,6 @@ class RandomProjectionModule(nn.Module):
         for i in range(self.num_layer + 1):
             random_projections.append(self.random_projections[i][node_ids])
         return random_projections
-    '''
 
     def get_pair_wise_feature(self, src_node_ids: np.ndarray, dst_node_ids: np.ndarray):
         """
@@ -465,45 +127,8 @@ class RandomProjectionModule(nn.Module):
             random_feature[random_feature < 0] = 0
             random_feature = torch.log(random_feature + 1.0)
             return self.mlp(random_feature)
-    
+
     def reset_random_projections(self):
-        if self.M == 1:
-            for i in range(1, self.num_layer + 1):
-                nn.init.zeros_(self.random_projections[i])
-            self.now_time.data = self.begging_time.clone()
-            if not self.use_matrix:
-                nn.init.normal_(self.random_projections[0], mean=0, std=1 / math.sqrt(self.dim))
-        else:
-            for m in range(self.M):
-                for i in range(1, self.num_layer + 1):
-                    nn.init.zeros_(self.random_projections_multi[m][i])
-                if not self.use_matrix:
-                    nn.init.normal_(self.random_projections_multi[m][0], mean=0, std=1 / math.sqrt(self.dim))
-            self.now_time.data = self.begging_time.clone()
-
-    def backup_random_projections(self):
-        if self.M == 1:
-            return self.now_time.clone(), [self.random_projections[i].clone() for i in range(1, self.num_layer + 1)]
-        else:
-            return self.now_time.clone(), [
-                [self.random_projections_multi[m][i].clone() for i in range(1, self.num_layer + 1)]
-                for m in range(self.M)
-        ]
-
-    def reload_random_projections(self, random_projections):
-        now_time, payload = random_projections
-        self.now_time.data = now_time.clone()
-        # payload può essere lista di tensor (M=1) oppure lista di liste (M>1)
-        if self.M == 1 and isinstance(payload, list) and (len(payload) == self.num_layer):
-            for i in range(1, self.num_layer + 1):
-                self.random_projections[i].data = payload[i - 1].clone()
-        else:
-            # multi-scala
-            for m in range(self.M):
-                for i in range(1, self.num_layer + 1):
-                    self.random_projections_multi[m][i].data = payload[m][i - 1].clone()
-
-    def reset_random_projections_og(self):
         """
         reset the random projections
         """
@@ -513,7 +138,7 @@ class RandomProjectionModule(nn.Module):
         if not self.use_matrix:
             nn.init.normal_(self.random_projections[0], mean=0, std=1 / math.sqrt(self.dim))
 
-    def backup_random_projections_og(self):
+    def backup_random_projections(self):
         """
         backup the random projections.
         :return: tuple of (now_time,random_projections)
@@ -521,7 +146,7 @@ class RandomProjectionModule(nn.Module):
         return self.now_time.clone(), [self.random_projections[i].clone() for i in
                                        range(1, self.num_layer + 1)]
 
-    def reload_random_projections_og(self, random_projections):
+    def reload_random_projections(self, random_projections):
         """
         reload the random projections.
         :param random_projections: tuple of (now_time,random_projections)

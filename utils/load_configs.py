@@ -69,12 +69,13 @@ def get_link_prediction_args(is_evaluation: bool = False):
     parser.add_argument('--use_random_projection', action='store_true', help='whether use the random projection')
     parser.add_argument('--rp_num_layer', type=int, default=3,
                         help='the max hop of the maintained temporal walk matrices')
-    '''
+    
+    #TPNet OG
     parser.add_argument('--rp_time_decay_weight', type=float, default=0.0000001,
                         help='the time decay weight of the maintained temporal walk matrix')
-    '''
-    parser.add_argument('--rp_time_decay_weight', type=list[float], default=[0.001, 0.0001, 
-                                                                  0.00001, 0.000001, 0.0000001, 0.00000001])
+    #TPNet vMat
+    '''parser.add_argument('--rp_time_decay_weight', type=list[float], default=[0.001, 0.0001, 
+                                                                  0.00001, 0.000001, 0.0000001, 0.00000001])'''
     parser.add_argument('--rp_dim_factor', type=int, default=10,
                         help='the dim factor of random projections w.r.t. the log(2*edge_num)')
     parser.add_argument('--encode_not_rp', action='store_true', help='whether to use pairwise features in encoder')
