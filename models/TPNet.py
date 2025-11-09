@@ -42,9 +42,9 @@ class RandomProjectionModule(nn.Module):
         self.M = len(self.lambdas)
 
         # Debug info
-        print("[INIT] RandomProjectionModule avviato")
-        print(f" - Numero di scale temporali: {self.M}")
-        print(f" - Lambda: {self.lambdas}\n")
+        #print("[INIT] RandomProjectionModule avviato")
+        #print(f" - Numero di scale temporali: {self.M}")
+        #print(f" - Lambda: {self.lambdas}\n")
 
         # Inizializzazione delle proiezioni random per ogni scala
         if self.use_matrix:
@@ -120,7 +120,7 @@ class RandomProjectionModule(nn.Module):
             per_scale.append(stack_m)
 
         avg = torch.stack(per_scale, dim=0).mean(dim=0)  # (batch, k+1, d_R)
-        print(f"[DEBUG] Media semplice calcolata su {self.M} scale, shape finale: {avg.shape}")
+        #print(f"[DEBUG] Media semplice calcolata su {self.M} scale, shape finale: {avg.shape}")
         return [avg[:, i, :] for i in range(self.num_layer + 1)]
 
     ###############################################################
