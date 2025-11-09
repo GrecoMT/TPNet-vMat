@@ -1,6 +1,6 @@
-# TPNet_mean.py
-# Versione modificata del modello TPNet per implementare la MEDIA SEMPLICE tra scale temporali.
-# Mantiene la stessa struttura e le stesse classi del codice originale TPNetMOD.py.
+# TPNet_weighted.py
+# Versione estesa del modello TPNet che implementa la seconda modifica:
+# pesatura per-hop tramite softmax sui pesi hop_gate (fusione pesata tra scale temporali)
 
 import torch
 import numpy as np
@@ -10,72 +10,65 @@ from utils.utils import NeighborSampler
 from models.modules import TimeEncoder
 
 ###############################################################
-# RANDOM PROJECTION MODULE (MEDIA SEMPLICE TRA SCALE)
+# RANDOM PROJECTION MODULE (PESATURA PER-HOP)
 ###############################################################
 class RandomProjectionModule(nn.Module):
     def __init__(self, node_num: int, edge_num: int, dim_factor: int, num_layer: int, time_decay_weight: list[float],
                  device: str, use_matrix: bool, beginning_time: np.float64, not_scale: bool, enforce_dim: int):
         """
-        Modulo di proiezione random per cammini temporali.
-        Versione con MEDIA SEMPLICE tra le diverse scale (lambda).
+        Modulo di proiezione random multi-scala con fusione pesata tra le scale temporali.
+        I pesi sono specifici per hop e vengono normalizzati con softmax.
         """
         super(RandomProjectionModule, self).__init__()
 
-        # Parametri di base
+        # Parametri base
         self.node_num = node_num
         self.edge_num = edge_num
-        if enforce_dim != -1:
-            self.dim = enforce_dim
-        else:
-            self.dim = min(int(math.log(self.edge_num * 2)) * dim_factor, node_num)
+        self.dim = enforce_dim if enforce_dim != -1 else min(int(math.log(self.edge_num * 2)) * dim_factor, node_num)
         self.num_layer = num_layer
         self.time_decay_weight = time_decay_weight
         self.device = device
         self.use_matrix = use_matrix
         self.node_feature_dim = 128
         self.not_scale = not_scale
-        self.begging_time = nn.Parameter(torch.tensor(beginning_time), requires_grad=False)
-        self.now_time = nn.Parameter(torch.tensor(beginning_time), requires_grad=False)
 
-        # Setup multi-scala (lista di lambda)
+        # Multi-scala (lista di lambda)
         self.lambdas = time_decay_weight
         self.M = len(self.lambdas)
 
-        # Debug info
-        print("[INIT] RandomProjectionModule avviato")
-        print(f" - Numero di scale temporali: {self.M}")
-        print(f" - Lambda: {self.lambdas}\n")
+        self.begging_time = nn.Parameter(torch.tensor(beginning_time), requires_grad=False)
+        self.now_time = nn.Parameter(torch.tensor(beginning_time), requires_grad=False)
 
-        # Inizializzazione delle proiezioni random per ogni scala
-        if self.use_matrix:
-            # Ogni scala mantiene matrici H^(0..k) di dimensione n x n
-            self.random_projections_multi = nn.ModuleList()
-            for _ in range(self.M):
-                pl = nn.ParameterList()
-                for i in range(self.num_layer + 1):
-                    if i == 0:
-                        pl.append(nn.Parameter(torch.eye(self.node_num), requires_grad=False))
-                    else:
-                        pl.append(nn.Parameter(torch.zeros(self.node_num, self.node_num), requires_grad=False))
-                self.random_projections_multi.append(pl)
-        else:
-            # Ogni scala mantiene matrici H^(0..k) di dimensione n x d_R
-            self.random_projections_multi = nn.ModuleList()
-            for _ in range(self.M):
-                pl = nn.ParameterList()
-                for i in range(self.num_layer + 1):
-                    if i == 0:
-                        pl.append(nn.Parameter(torch.normal(0, 1 / math.sqrt(self.dim), (self.node_num, self.dim)), requires_grad=False))
-                    else:
-                        pl.append(nn.Parameter(torch.zeros(self.node_num, self.dim), requires_grad=False))
-                self.random_projections_multi.append(pl)
+        # Debug iniziale
+        print("[INIT] RandomProjectionModule (pesato per-hop)")
+        print(f" - Numero di scale temporali M: {self.M}")
+        print(f" - Lambda: {self.lambdas}")
+        print(f" - Numero layer (hop): {self.num_layer}\n")
 
+        # Inizializzazione proiezioni random multi-scala
+        self.random_projections_multi = nn.ModuleList()
+        for _ in range(self.M):
+            pl = nn.ParameterList()
+            for i in range(self.num_layer + 1):
+                if i == 0:
+                    pl.append(nn.Parameter(torch.normal(0, 1 / math.sqrt(self.dim),
+                                                         (self.node_num, self.dim)), requires_grad=False))
+                else:
+                    pl.append(nn.Parameter(torch.zeros(self.node_num, self.dim), requires_grad=False))
+            self.random_projections_multi.append(pl)
+
+        # MLP per estrazione feature di coppie
         self.pair_wise_feature_dim = (2 * self.num_layer + 2) ** 2
         self.mlp = nn.Sequential(
             nn.Linear(self.pair_wise_feature_dim, self.pair_wise_feature_dim * 4),
             nn.ReLU(),
             nn.Linear(self.pair_wise_feature_dim * 4, self.pair_wise_feature_dim)
         )
+
+        # Inizializzazione dei pesi per-hop: matrice (k+1) x M
+        # Ogni riga rappresenta un hop, ogni colonna una scala temporale.
+        self.hop_gate = nn.Parameter(torch.zeros(self.num_layer + 1, self.M))
+        print(f"[DEBUG] hop_gate inizializzato con shape {self.hop_gate.shape}\n")
 
     ###############################################################
     # UPDATE DELLE PROIEZIONI TEMPORALI
@@ -86,42 +79,51 @@ class RandomProjectionModule(nn.Module):
         next_time = node_interact_times[-1]
         node_interact_times = torch.from_numpy(node_interact_times).to(dtype=torch.float, device=self.device)
 
+        # Aggiornamento multi-scala
         for m, lam in enumerate(self.lambdas):
             time_weight = torch.exp(-lam * (next_time - node_interact_times))[:, None]
 
-            # Decadimento temporale (avanzamento nel tempo)
+            # Decadimento temporale
             for i in range(1, self.num_layer + 1):
                 factor = np.power(np.exp(-lam * (next_time - self.now_time.cpu().numpy())), i)
                 self.random_projections_multi[m][i].data *= factor
 
-            # Aggiornamento batch (scatter_add)
+            # Aggiornamento tramite scatter_add_
             for i in range(self.num_layer, 0, -1):
                 src_msg = self.random_projections_multi[m][i - 1][dst_node_ids] * time_weight
                 dst_msg = self.random_projections_multi[m][i - 1][src_node_ids] * time_weight
-                self.random_projections_multi[m][i].scatter_add_(dim=0, index=src_node_ids[:, None].expand(-1, self.dim), src=src_msg)
-                self.random_projections_multi[m][i].scatter_add_(dim=0, index=dst_node_ids[:, None].expand(-1, self.dim), src=dst_msg)
+                self.random_projections_multi[m][i].scatter_add_(
+                    dim=0, index=src_node_ids[:, None].expand(-1, self.dim), src=src_msg)
+                self.random_projections_multi[m][i].scatter_add_(
+                    dim=0, index=dst_node_ids[:, None].expand(-1, self.dim), src=dst_msg)
 
+        # Aggiorna tempo corrente
         self.now_time.data = torch.tensor(next_time, device=self.device)
 
     ###############################################################
-    # RANDOM PROJECTION CON MEDIA SEMPLICE TRA SCALE
+    # RANDOM PROJECTION CON PESATURA PER-HOP
     ###############################################################
     def get_random_projections(self, node_ids: np.ndarray):
-        if self.M == 1:
-            return [self.random_projections_multi[0][i][node_ids] for i in range(self.num_layer + 1)]
+        k1 = self.num_layer + 1
 
-        # Estrae tutte le scale -> media aritmetica
+        # Raccolta delle proiezioni su tutte le scale
         per_scale = []
         for m in range(self.M):
             stack_m = torch.stack(
-                [self.random_projections_multi[m][i][node_ids, :] for i in range(self.num_layer + 1)],
+                [self.random_projections_multi[m][i][node_ids, :] for i in range(k1)],
                 dim=1  # (batch, k+1, d_R)
             )
             per_scale.append(stack_m)
 
-        avg = torch.stack(per_scale, dim=0).mean(dim=0)  # (batch, k+1, d_R)
-        print(f"[DEBUG] Media semplice calcolata su {self.M} scale, shape finale: {avg.shape}")
-        return [avg[:, i, :] for i in range(self.num_layer + 1)]
+        S = torch.stack(per_scale, dim=0)  # (M, batch, k+1, d_R)
+
+        # Fusione pesata per-hop
+        W = torch.softmax(self.hop_gate, dim=1)  # (k+1, M)
+        Wb = W.t().contiguous().view(self.M, 1, k1, 1)  # broadcast (M, 1, k+1, 1)
+        fused = (S * Wb).sum(dim=0)  # (batch, k+1, d_R)
+
+        print(f"[DEBUG] Fusione pesata completata: W shape {W.shape}, fused shape {fused.shape}")
+        return [fused[:, i, :] for i in range(k1)]
 
     ###############################################################
     # FUNZIONI ORIGINALI DI SUPPORTO
@@ -159,15 +161,13 @@ class RandomProjectionModule(nn.Module):
                 self.random_projections_multi[m][i].data = payload[m][i - 1].clone()
 
 ###############################################################
-# TPNet_Mean
+# TPNet_Weighted
 ###############################################################
-##class TPNet_Mean(torch.nn.Module):
-class TPNet(torch.nn.Module):
+class TPNet_Weighted(torch.nn.Module):
     def __init__(self, node_raw_features: np.ndarray, edge_raw_features: np.ndarray, neighbor_sampler: NeighborSampler,
                  time_feat_dim: int, dropout: float, random_projections: RandomProjectionModule,
                  num_layers: int, num_neighbors: int, device: str):
-        #super(TPNet_Mean, self).__init__()
-        super(TPNet, self).__init__()
+        super(TPNet_Weighted, self).__init__()
 
         self.node_raw_features = torch.from_numpy(node_raw_features.astype(np.float32)).to(device)
         self.edge_raw_features = torch.from_numpy(edge_raw_features.astype(np.float32)).to(device)
@@ -212,7 +212,7 @@ class TPNet(torch.nn.Module):
             self.embedding_module.neighbor_sampler.reset_random_state()
 
 ###############################################################
-# TPNetEmbedding
+# TPNetEmbedding, FeedForwardNet, MLPMixer (immutati)
 ###############################################################
 class TPNetEmbedding(nn.Module):
     def __init__(self, node_raw_features: torch.Tensor, edge_raw_features: torch.Tensor, neighbor_sampler: NeighborSampler,
@@ -277,9 +277,6 @@ class TPNetEmbedding(nn.Module):
         embeddings = torch.mean(embeddings, dim=1)
         return embeddings
 
-###############################################################
-# FEEDFORWARD & MLP MIXER
-###############################################################
 class FeedForwardNet(nn.Module):
     def __init__(self, input_dim: int, dim_expansion_factor: float, dropout: float = 0.0):
         super(FeedForwardNet, self).__init__()
