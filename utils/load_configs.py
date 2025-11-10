@@ -316,7 +316,7 @@ def load_link_prediction_best_configs(args: argparse.Namespace):
     else:
         raise ValueError(f"Wrong value for model_name {args.model_name}!")
 
-    if args.use_random_projection:
+'''    if args.use_random_projection:
         if args.dataset_name in ['Contacts']:
             args.rp_time_decay_weight = 0.0001
         elif args.dataset_name in ['UNvote', 'CanParl', 'mooc']:
@@ -327,3 +327,4 @@ def load_link_prediction_best_configs(args: argparse.Namespace):
             args.rp_time_decay_weight = 0.0000001
         else:
             raise ValueError("Not Recognized Dataset!")
+'''
