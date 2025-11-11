@@ -71,11 +71,13 @@ def get_link_prediction_args(is_evaluation: bool = False):
                         help='the max hop of the maintained temporal walk matrices')
     
     #TPNet OG
-    '''parser.add_argument('--rp_time_decay_weight', type=float, default=0.0000001,
-                        help='the time decay weight of the maintained temporal walk matrix')'''
+    parser.add_argument('--rp_time_decay_weight', type=float, default=0.0000001,
+                        help='the time decay weight of the maintained temporal walk matrix')
     #TPNet vMat
+    '''
     parser.add_argument('--rp_time_decay_weight', type=list[float], default=[0.001, 0.0001, 
                                                                   0.00001, 0.000001, 0.0000001, 0.00000001])
+    '''
     parser.add_argument('--rp_dim_factor', type=int, default=10,
                         help='the dim factor of random projections w.r.t. the log(2*edge_num)')
     parser.add_argument('--encode_not_rp', action='store_true', help='whether to use pairwise features in encoder')
@@ -316,7 +318,7 @@ def load_link_prediction_best_configs(args: argparse.Namespace):
     else:
         raise ValueError(f"Wrong value for model_name {args.model_name}!")
 
-'''    if args.use_random_projection:
+    if args.use_random_projection:
         if args.dataset_name in ['Contacts']:
             args.rp_time_decay_weight = 0.0001
         elif args.dataset_name in ['UNvote', 'CanParl', 'mooc']:
@@ -327,4 +329,3 @@ def load_link_prediction_best_configs(args: argparse.Namespace):
             args.rp_time_decay_weight = 0.0000001
         else:
             raise ValueError("Not Recognized Dataset!")
-'''
