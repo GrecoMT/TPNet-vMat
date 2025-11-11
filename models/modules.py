@@ -40,6 +40,32 @@ class TimeEncoder(nn.Module):
 
         return output
 
+class TimeEncoderV2(nn.Module):
+    def __init__(self, time_dim: int):
+        """
+        Learnable time encoder (replaces sinusoidal encoding).
+        :param time_dim: int, dimension of time features
+        """
+        super(TimeEncoderV2, self).__init__()
+        self.time_dim = time_dim
+        self.encoder = nn.Sequential(
+            nn.Linear(1, time_dim),
+            nn.ReLU(),
+            nn.Linear(time_dim, time_dim),
+            nn.LayerNorm(time_dim)
+        )
+
+        #print(f"[DEBUG] LearnableTimeEncoder initialized with dimension {time_dim}")
+
+    def forward(self, timestamps: torch.Tensor):
+        """
+        Encode time differences as learnable features.
+        :param timestamps: Tensor, shape (batch_size, seq_len)
+        :return: Tensor, shape (batch_size, seq_len, time_dim)
+        """
+        timestamps = timestamps.unsqueeze(dim=2)  # (batch, seq_len, 1)
+        return self.encoder(timestamps)
+
 class MergeLayer(nn.Module):
 
     def __init__(self, input_dim1: int, input_dim2: int, hidden_dim: int, output_dim: int):
