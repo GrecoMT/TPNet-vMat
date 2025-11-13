@@ -39,7 +39,7 @@ class RandomProjectionModule(nn.Module):
         self.use_matrix = use_matrix
         self.node_feature_dim = 128
         self.not_scale = not_scale
-
+        
         
 
         # if use_matrix = True, directly store the temporal walk matrices
@@ -67,6 +67,7 @@ class RandomProjectionModule(nn.Module):
                                  nn.Linear(self.pair_wise_feature_dim * 4, self.pair_wise_feature_dim))
         # Bilinear
         self.W = nn.Parameter(torch.eye(self.dim))
+        print(f"DIO CANE ASTRONAUTA: {self.W}")
 
     def update(self, src_node_ids: np.ndarray, dst_node_ids: np.ndarray, node_interact_times: np.ndarray):
         """
