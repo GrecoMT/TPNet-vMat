@@ -33,7 +33,7 @@ from models.CAWN import CAWN
 from models.TCL import TCL
 from models.GraphMixer import GraphMixer
 from models.DyGFormer import DyGFormer
-from models.TPNetOG import TPNet, RandomProjectionModule
+from models.TPNet import TPNet, RandomProjectionModule
 from models.NAT import NAT
 from models.modules import LinkPredictor_v1, LinkPredictor_v2
 from utils.utils import set_thread, set_random_seed, convert_to_gpu, get_parameter_sizes, create_optimizer
@@ -715,9 +715,6 @@ if __name__ == "__main__":
     if args.model_name == 'TPNet' and args.use_random_projection:
         print("\n[INFO] Analisi finale della matrice bilineare W...")
     
-        prova = model[0].random_projections.not_scale.detach().cpu()
-        print(f"PROVA PROVA PROVA  {prova}")
-
         W = model[0].random_projections.W.detach().cpu()  # estrai W
         I = torch.eye(W.shape[0])
         delta = W - I

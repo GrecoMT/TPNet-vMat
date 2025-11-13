@@ -41,8 +41,7 @@ class RandomProjectionModule(nn.Module):
         self.not_scale = not_scale
         
 
-        print(f"SELF.DIM CHE CAZZO SEI MOSTRO{self.dim}")
-        self.W = nn.Parameter(torch.eye(self.dim))
+        
 
         # if use_matrix = True, directly store the temporal walk matrices
         if self.use_matrix:
@@ -67,6 +66,8 @@ class RandomProjectionModule(nn.Module):
         self.pair_wise_feature_dim = (2 * self.num_layer + 2) ** 2
         self.mlp = nn.Sequential(nn.Linear(self.pair_wise_feature_dim, self.pair_wise_feature_dim * 4), nn.ReLU(),
                                  nn.Linear(self.pair_wise_feature_dim * 4, self.pair_wise_feature_dim))
+        #bilinear
+        self.W = nn.Parameter(torch.eye(self.dim))
 
     def update(self, src_node_ids: np.ndarray, dst_node_ids: np.ndarray, node_interact_times: np.ndarray):
         """
@@ -115,7 +116,6 @@ class RandomProjectionModule(nn.Module):
         
     # MOD -> bilinear product
     def get_pair_wise_feature(self, src_node_ids: np.ndarray, dst_node_ids: np.ndarray):
-        print(f"DIO MERDA DIO CANE PORCO: {self.W}")
         src_random_projections = torch.stack(self.get_random_projections(src_node_ids), dim=1)   
         dst_random_projections = torch.stack(self.get_random_projections(dst_node_ids), dim=1)   
         random_projections = torch.cat([src_random_projections, dst_random_projections], dim=1)  
