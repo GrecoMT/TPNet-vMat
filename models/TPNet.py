@@ -40,8 +40,7 @@ class RandomProjectionModule(nn.Module):
         self.node_feature_dim = 128
         self.not_scale = not_scale
 
-        # Bilinear
-        self.W = nn.Parameter(torch.eye(self.dim))
+        
 
         # if use_matrix = True, directly store the temporal walk matrices
         if self.use_matrix:
@@ -66,6 +65,8 @@ class RandomProjectionModule(nn.Module):
         self.pair_wise_feature_dim = (2 * self.num_layer + 2) ** 2
         self.mlp = nn.Sequential(nn.Linear(self.pair_wise_feature_dim, self.pair_wise_feature_dim * 4), nn.ReLU(),
                                  nn.Linear(self.pair_wise_feature_dim * 4, self.pair_wise_feature_dim))
+        # Bilinear
+        self.W = nn.Parameter(torch.eye(self.dim))
 
     def update(self, src_node_ids: np.ndarray, dst_node_ids: np.ndarray, node_interact_times: np.ndarray):
         """
