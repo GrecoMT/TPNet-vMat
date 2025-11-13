@@ -714,9 +714,10 @@ if __name__ == "__main__":
     # =============================
     if args.model_name == 'TPNet' and args.use_random_projection:
         print("\n[INFO] Analisi finale della matrice bilineare W...")
-        print("DIO CANE PORCO DIO")
-
     
+        prova = model[0].random_projections.not_scale.detach().cpu()
+        print(f"PROVA PROVA PROVA  {prova}")
+
         W = model[0].random_projections.W.detach().cpu()  # estrai W
         I = torch.eye(W.shape[0])
         delta = W - I
