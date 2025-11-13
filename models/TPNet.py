@@ -113,7 +113,7 @@ class RandomProjectionModule(nn.Module):
         return random_projections
         
     # MOD -> bilinear product
-    def get_pair_wise_featur(self, src_node_ids: np.ndarray, dst_node_ids: np.ndarray):
+    def get_pair_wise_feature(self, src_node_ids: np.ndarray, dst_node_ids: np.ndarray):
         src_random_projections = torch.stack(self.get_random_projections(src_node_ids), dim=1)   
         dst_random_projections = torch.stack(self.get_random_projections(dst_node_ids), dim=1)   
         random_projections = torch.cat([src_random_projections, dst_random_projections], dim=1)  
