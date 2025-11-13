@@ -724,7 +724,6 @@ if __name__ == "__main__":
         torch.save(W, f"saved_weights/W_final_{args.dataset_name}.pt")
 
         # Statistiche
-        print(f"[W] Dimensione: {tuple(W.shape)}")
         print(f"[W] ||W - I||_F = {torch.norm(delta, p='fro').item():.4f}")
         print(f"[W] media Δ = {delta.mean().item():.4e}, std Δ = {delta.std().item():.4e}")
         print(f"[W] min = {W.min().item():.4f}, max = {W.max().item():.4f}")
