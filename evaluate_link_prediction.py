@@ -30,7 +30,7 @@ from models.CAWN import CAWN
 from models.TCL import TCL
 from models.GraphMixer import GraphMixer
 from models.DyGFormer import DyGFormer
-from models.TPNet import RandomProjectionModule, TPNet
+from models.TPNetOG import RandomProjectionModule, TPNet
 from models.NAT import NAT
 from models.modules import LinkPredictor_v1, LinkPredictor_v2
 from utils.utils import set_random_seed, convert_to_gpu, get_parameter_sizes

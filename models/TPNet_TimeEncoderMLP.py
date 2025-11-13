@@ -3,7 +3,8 @@ import numpy as np
 import torch.nn as nn
 from utils.utils import NeighborSampler
 import math
-from models.modules import TimeEncoder
+#Mod
+from models.modules import TimeEncoderV2
 
 class RandomProjectionModule(nn.Module):
     def __init__(self, node_num: int, edge_num: int, dim_factor: int, num_layer: int, time_decay_weight: float,
@@ -39,10 +40,6 @@ class RandomProjectionModule(nn.Module):
         self.use_matrix = use_matrix
         self.node_feature_dim = 128
         self.not_scale = not_scale
-
-        # Bilinear
-        self.W = nn.Parameter(torch.eye(self.dim))
-
         # if use_matrix = True, directly store the temporal walk matrices
         if self.use_matrix:
             self.dim = self.node_num
@@ -111,25 +108,25 @@ class RandomProjectionModule(nn.Module):
         for i in range(self.num_layer + 1):
             random_projections.append(self.random_projections[i][node_ids])
         return random_projections
-        
-    # MOD -> bilinear product
-    def get_pair_wise_featur(self, src_node_ids: np.ndarray, dst_node_ids: np.ndarray):
-        src_random_projections = torch.stack(self.get_random_projections(src_node_ids), dim=1)   
-        dst_random_projections = torch.stack(self.get_random_projections(dst_node_ids), dim=1)   
-        random_projections = torch.cat([src_random_projections, dst_random_projections], dim=1)  
 
-        # MOD: F_{u,v} W F_{u,v}^T 
-        prod = torch.matmul(torch.matmul(random_projections, self.W), random_projections.transpose(1, 2))
-
-        # flatten per ottenere la raw pairwise feature
-        raw_pairwise_feature = prod.reshape(len(src_node_ids), -1)
-
+    def get_pair_wise_feature(self, src_node_ids: np.ndarray, dst_node_ids: np.ndarray):
+        """
+        get pairwise feature for given source nodes and destination nodes.
+        :param src_node_ids: np.ndarray, shape (batch,)
+        :param dst_node_ids: np.ndarray, shape (batch,)
+        :return:
+        """
+        src_random_projections = torch.stack(self.get_random_projections(src_node_ids), dim=1)
+        dst_random_projections = torch.stack(self.get_random_projections(dst_node_ids), dim=1)
+        random_projections = torch.cat([src_random_projections, dst_random_projections], dim=1)
+        random_feature = torch.matmul(random_projections, random_projections.transpose(1, 2)).reshape(
+            len(src_node_ids), -1)
         if self.not_scale:
-            return self.mlp(raw_pairwise_feature)
+            return self.mlp(random_feature)
         else:
-            raw_pairwise_feature[raw_pairwise_feature < 0] = 0
-            raw_pairwise_feature = torch.log(raw_pairwise_feature + 1.0)
-            return self.mlp(raw_pairwise_feature)
+            random_feature[random_feature < 0] = 0
+            random_feature = torch.log(random_feature + 1.0)
+            return self.mlp(random_feature)
 
     def reset_random_projections(self):
         """
@@ -191,7 +188,8 @@ class TPNet(torch.nn.Module):
         self.num_nodes = self.node_raw_features.shape[0]
 
         self.random_projections = random_projections
-        self.time_encoder = TimeEncoder(time_dim=time_feat_dim)
+        #self.time_encoder = TimeEncoder(time_dim=time_feat_dim)
+        self.time_encoder = TimeEncoderV2(time_dim=time_feat_dim)
 
         # embedding module
         self.embedding_module = TPNetEmbedding(node_raw_features=self.node_raw_features,

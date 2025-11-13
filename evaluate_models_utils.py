@@ -14,7 +14,7 @@ from utils.metrics import get_link_prediction_metrics
 from utils.utils import set_random_seed
 from utils.utils import NegativeEdgeSampler, NeighborSampler
 from utils.DataLoader import Data
-from models.TPNet import RandomProjectionModule
+from models.TPNetOG import RandomProjectionModule
 
 
 def evaluate_model_link_prediction(model_name: str, model: nn.Module, neighbor_sampler: NeighborSampler,
