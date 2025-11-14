@@ -82,6 +82,11 @@ class EarlyStopping(object):
         """
         self.logger.info(f"load model {self.save_model_path}")
         save_object = torch.load(self.save_model_path, map_location=map_location)
-        model.load_state_dict(save_object['model'])
+        #OG
+        #model.load_state_dict(save_object['model'])
+        
+        #Bilinear
+        model.load_state_dict(save_object['model'], strict=False)
+        
         if self.model_name in ['JODIE', 'DyRep', 'TGN','PINT']:
             model[0].memory_bank.node_raw_messages = save_object['message']
