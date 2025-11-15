@@ -67,9 +67,9 @@ class RandomProjectionModule(nn.Module):
         self.mlp = nn.Sequential(nn.Linear(self.pair_wise_feature_dim, self.pair_wise_feature_dim * 4), nn.ReLU(),
                                  nn.Linear(self.pair_wise_feature_dim * 4, self.pair_wise_feature_dim))
         #bilinear
-        #self.W = nn.Parameter(torch.eye(self.dim)) #Inizializzazione identità
-        self.W = nn.Parameter(torch.empty(self.dim, self.dim)) 
-        nn.init.xavier_uniform_(self.W) #Inizializzazione Xavier
+        self.W = nn.Parameter(torch.eye(self.dim)) #Inizializzazione identità
+        #self.W = nn.Parameter(torch.empty(self.dim, self.dim)) 
+        #nn.init.xavier_uniform_(self.W) #Inizializzazione Xavier
 
 
     def update(self, src_node_ids: np.ndarray, dst_node_ids: np.ndarray, node_interact_times: np.ndarray):
