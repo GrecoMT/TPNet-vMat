@@ -55,8 +55,6 @@ class TimeEncoderV2(nn.Module):
             nn.LayerNorm(time_dim)
         )
 
-        #print(f"[DEBUG] LearnableTimeEncoder initialized with dimension {time_dim}")
-
     def forward(self, timestamps: torch.Tensor):
         """
         Encode time differences as learnable features.

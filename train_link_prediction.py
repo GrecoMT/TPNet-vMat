@@ -709,39 +709,24 @@ if __name__ == "__main__":
                 f'± {np.std([new_node_test_metric_single_run[metric_name] for new_node_test_metric_single_run in new_node_test_metric_all_runs], ddof=1):.4f}')
         wandb_logger.log_final(run_metrics=test_metric_all_runs, new_node_run_metrics=new_node_test_metric_all_runs)
     
-        # =============================
-    # ANALISI MATRICE W (solo TPNet con RandomProjection)
-    # =============================
+
+    #Istogramma W-I per prodotto bilineare
     if args.model_name == 'TPNet' and args.use_random_projection:
-        print("\n[INFO] Analisi finale della matrice bilineare W...")
     
-        W = model[0].random_projections.W.detach().cpu()  # estrai W
+        W = model[0].random_projections.W.detach().cpu()  #W
         I = torch.eye(W.shape[0])
         delta = W - I
 
-        # Salvataggio
+
         os.makedirs("saved_weights", exist_ok=True)
         torch.save(W, f"saved_weights/W_final_{args.dataset_name}.pt")
 
-        # Statistiche
-        print(f"[W] ||W - I||_F = {torch.norm(delta, p='fro').item():.4f}")
-        print(f"[W] media Δ = {delta.mean().item():.4e}, std Δ = {delta.std().item():.4e}")
-        print(f"[W] min = {W.min().item():.4f}, max = {W.max().item():.4f}")
-
-        # Heatmap e istogramma
-
-        sns.heatmap(delta.numpy(), cmap='bwr', center=0)
-        plt.title(f"Differenza W - I ({args.dataset_name})")
-        plt.savefig(f"saved_weights/W_diff_heatmap_{args.dataset_name}.png")
-        plt.close()
-
+        #Istogramma
         plt.hist(delta.flatten().numpy(), bins=60, color='steelblue')
         plt.title(f"Distribuzione (W - I) - {args.dataset_name}")
         plt.xlabel("Deviazione dal valore identità")
         plt.ylabel("Frequenza")
         plt.savefig(f"saved_weights/W_diff_hist_{args.dataset_name}.png")
-        plt.close()
-
-        print("[INFO] File salvati in ./saved_weights/")
+        plt.close()    
 
     sys.exit()

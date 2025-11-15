@@ -67,7 +67,10 @@ class RandomProjectionModule(nn.Module):
         self.mlp = nn.Sequential(nn.Linear(self.pair_wise_feature_dim, self.pair_wise_feature_dim * 4), nn.ReLU(),
                                  nn.Linear(self.pair_wise_feature_dim * 4, self.pair_wise_feature_dim))
         #bilinear
-        self.W = nn.Parameter(torch.eye(self.dim))
+        #self.W = nn.Parameter(torch.eye(self.dim)) #Inizializzazione identità
+        self.W = nn.Parameter(torch.empty(self.dim, self.dim)) 
+        nn.init.xavier_uniform_(self.W) #Inizializzazione Xavier
+
 
     def update(self, src_node_ids: np.ndarray, dst_node_ids: np.ndarray, node_interact_times: np.ndarray):
         """
@@ -120,10 +123,10 @@ class RandomProjectionModule(nn.Module):
         dst_random_projections = torch.stack(self.get_random_projections(dst_node_ids), dim=1)   
         random_projections = torch.cat([src_random_projections, dst_random_projections], dim=1)  
 
-        # MOD: F_{u,v} W F_{u,v}^T 
+        # F_{u,v} W F_{u,v}^T 
         prod = torch.matmul(torch.matmul(random_projections, self.W), random_projections.transpose(1, 2))
 
-        # flatten per ottenere la raw pairwise feature
+        # flattening per ottenere la raw pairwise feature
         raw_pairwise_feature = prod.reshape(len(src_node_ids), -1)
 
         if self.not_scale:
