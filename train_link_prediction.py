@@ -711,7 +711,7 @@ if __name__ == "__main__":
     
 
     #Istogramma W-I per prodotto bilineare
-    if args.model_name == 'TPNet' and args.use_random_projection:
+    '''if args.model_name == 'TPNet' and args.use_random_projection:
     
         W = model[0].random_projections.W.detach().cpu()  #W
         I = torch.eye(W.shape[0])
@@ -727,6 +727,6 @@ if __name__ == "__main__":
         plt.xlabel("Deviazione dal valore identità")
         plt.ylabel("Frequenza")
         plt.savefig(f"saved_weights/W_diff_hist_{args.dataset_name}.png")
-        plt.close()    
+        plt.close()'''    
 
     sys.exit()

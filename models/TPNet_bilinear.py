@@ -40,9 +40,6 @@ class RandomProjectionModule(nn.Module):
         self.node_feature_dim = 128
         self.not_scale = not_scale
         
-
-        
-
         # if use_matrix = True, directly store the temporal walk matrices
         if self.use_matrix:
             self.dim = self.node_num
@@ -126,7 +123,7 @@ class RandomProjectionModule(nn.Module):
         # F_{u,v} W F_{u,v}^T 
         prod = torch.matmul(torch.matmul(random_projections, self.W), random_projections.transpose(1, 2))
 
-        # flattening per ottenere la raw pairwise feature
+        # flattening per raw pairwise feature
         raw_pairwise_feature = prod.reshape(len(src_node_ids), -1)
 
         if self.not_scale:
